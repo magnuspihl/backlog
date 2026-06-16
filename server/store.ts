@@ -1,12 +1,5 @@
-import { readFileSync, existsSync, renameSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { db } from './db.ts'
-
-const here = dirname(fileURLToPath(import.meta.url))
-const dataDir = join(here, '..', '.data')
-const legacyFile = join(dataDir, 'db.json')
 
 export type User = {
   id: string // discord user id
@@ -33,74 +26,6 @@ export type List = {
   games: number[] // igdb ids, in insertion order
   orderings: Record<string, number[]> // userId -> ordered igdb ids (that user's personal order)
   vetoes: Record<string, string[]> // igdb id (string) -> userIds who vetoed it
-}
-
-async function migrateLegacy() {
-  const { rows } = await db.query<{ n: number }>('SELECT count(*)::int AS n FROM lists')
-  if (rows[0].n > 0 || !existsSync(legacyFile)) return
-  let legacy: any
-  try {
-    legacy = JSON.parse(readFileSync(legacyFile, 'utf-8'))
-  } catch {
-    return
-  }
-  for (const u of Object.values<any>(legacy.users ?? {})) {
-    await db.query(
-      'INSERT INTO users (id, username, global_name, avatar) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO NOTHING',
-      [u.id, u.username, u.globalName ?? null, u.avatar ?? null],
-    )
-  }
-  for (const [token, userId] of Object.entries<any>(legacy.sessions ?? {})) {
-    await db.query(
-      'INSERT INTO sessions (token, user_id, created_at) VALUES ($1,$2,$3) ON CONFLICT (token) DO NOTHING',
-      [token, userId, Date.now()],
-    )
-  }
-  for (const g of Object.values<any>(legacy.games ?? {})) {
-    await db.query(
-      'INSERT INTO games (id, name, cover, release_year) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO NOTHING',
-      [g.id, g.name, g.cover ?? null, g.releaseYear ?? null],
-    )
-  }
-  for (const l of Object.values<any>(legacy.lists ?? {})) {
-    await db.query('INSERT INTO lists (id, name, owner_id, created_at) VALUES ($1,$2,$3,$4)', [
-      l.id,
-      l.name,
-      l.ownerId,
-      l.createdAt ?? Date.now(),
-    ])
-    for (const [userId, access] of Object.entries<any>(l.members ?? {})) {
-      await db.query(
-        'INSERT INTO list_members (list_id, user_id, access) VALUES ($1,$2,$3)',
-        [l.id, userId, access],
-      )
-    }
-    const games: number[] = l.games ?? []
-    for (let i = 0; i < games.length; i++) {
-      await db.query(
-        'INSERT INTO list_games (list_id, igdb_id, position) VALUES ($1,$2,$3)',
-        [l.id, games[i], i],
-      )
-    }
-    for (const [userId, order] of Object.entries<any>(l.orderings ?? {})) {
-      const ord = order as number[]
-      for (let rank = 0; rank < ord.length; rank++) {
-        await db.query(
-          'INSERT INTO orderings (list_id, user_id, igdb_id, rank) VALUES ($1,$2,$3,$4)',
-          [l.id, userId, ord[rank], rank],
-        )
-      }
-    }
-    for (const [igdbId, voters] of Object.entries<any>(l.vetoes ?? {})) {
-      for (const userId of voters as string[]) {
-        await db.query(
-          'INSERT INTO vetoes (list_id, igdb_id, user_id) VALUES ($1,$2,$3)',
-          [l.id, Number(igdbId), userId],
-        )
-      }
-    }
-  }
-  renameSync(legacyFile, legacyFile + '.migrated')
 }
 
 async function init() {
@@ -154,11 +79,24 @@ async function init() {
       PRIMARY KEY (list_id, igdb_id, user_id)
     );
   `)
-  await migrateLegacy()
 }
 
-// Resolves once the schema exists (and any legacy JSON has been imported).
-export const ready = init()
+// Lazy, memoized schema setup. Importing this module has no side effects (it is
+// pulled in while Vite loads its config). The schema is created on the first
+// request that needs it; if the database isn't reachable yet, the cached promise
+// is cleared so the next request retries — the app recovers on its own once
+// DATABASE_URL is present, with no restart needed.
+let schemaPromise: Promise<void> | null = null
+
+export function ready(): Promise<void> {
+  if (!schemaPromise) {
+    schemaPromise = init().catch((e) => {
+      schemaPromise = null
+      throw e
+    })
+  }
+  return schemaPromise
+}
 
 export function newId() {
   return randomUUID()

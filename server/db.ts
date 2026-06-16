@@ -1,56 +1,44 @@
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
-import { PGlite } from '@electric-sql/pglite'
 import pg from 'pg'
 
-const here = dirname(fileURLToPath(import.meta.url))
-const pgDir = join(here, '..', '.data', 'pg')
+// Forge provisions a PostgreSQL database for every project and exposes its
+// connection string as DATABASE_URL. We read it at runtime (not at import time)
+// and connect lazily, so a momentarily-absent or late-provisioned database can
+// never crash the dev server / frontend — the API just reports "not available"
+// until the variable shows up, then recovers on the next request.
+let pool: pg.Pool | null = null
 
-// A tiny abstraction over "the database". Both backends speak Postgres SQL with
-// $1-style params and return { rows }, so the rest of the app is identical
-// whether data lives in the embedded engine or an external server.
+export function databaseConfigured(): boolean {
+  return Boolean(process.env.DATABASE_URL?.trim())
+}
+
+function getPool(): pg.Pool {
+  const connectionString = process.env.DATABASE_URL?.trim()
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not set')
+  }
+  if (!pool) {
+    // Hosted databases sometimes require TLS that the connection string omits.
+    // DATABASE_SSL=require enables it (accepting the provider cert); =false forces off.
+    const sslEnv = process.env.DATABASE_SSL?.trim().toLowerCase()
+    const ssl =
+      sslEnv === 'require' ? { rejectUnauthorized: false } : sslEnv === 'false' ? false : undefined
+    pool = new pg.Pool({ connectionString, ...(ssl !== undefined ? { ssl } : {}) })
+    pool.on('error', (e) => console.error('[backlog] pg pool error:', e.message))
+  }
+  return pool
+}
+
 export interface Db {
   query<T = any>(sql: string, params?: any[]): Promise<{ rows: T[] }>
   exec(sql: string): Promise<void>
-  kind: 'external' | 'embedded'
 }
 
-function sslOption(): pg.PoolConfig['ssl'] {
-  // Many hosted Postgres providers require TLS but use certs Node won't verify
-  // by default. DATABASE_SSL controls it without touching the connection string.
-  const mode = (process.env.DATABASE_SSL ?? '').toLowerCase()
-  if (mode === 'false' || mode === 'disable' || mode === 'off') return false
-  if (mode === 'require' || mode === 'no-verify' || mode === 'true' || mode === 'on')
-    return { rejectUnauthorized: false }
-  return undefined // let the connection string / libpq defaults decide
+export const db: Db = {
+  async query(sql, params) {
+    const r = await getPool().query(sql, params)
+    return { rows: r.rows as any[] }
+  },
+  async exec(sql) {
+    await getPool().query(sql)
+  },
 }
-
-function makeDb(): Db {
-  const url = process.env.DATABASE_URL?.trim()
-  if (url) {
-    const pool = new pg.Pool({ connectionString: url, ssl: sslOption() })
-    return {
-      kind: 'external',
-      async query(sql, params) {
-        const r = await pool.query(sql, params)
-        return { rows: r.rows as any[] }
-      },
-      async exec(sql) {
-        await pool.query(sql)
-      },
-    }
-  }
-  const lite = new PGlite(pgDir)
-  return {
-    kind: 'embedded',
-    async query(sql, params) {
-      const r = await lite.query(sql, params)
-      return { rows: r.rows as any[] }
-    },
-    async exec(sql) {
-      await lite.exec(sql)
-    },
-  }
-}
-
-export const db = makeDb()

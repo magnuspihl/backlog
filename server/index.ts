@@ -34,14 +34,18 @@ import { sharedOrder, personalOrder, enrichGames } from './lists.ts'
 export const api = express()
 api.use(express.json())
 
-// Ensure the database schema is ready before any request is handled.
-api.use(async (_req, _res, next) => {
+// Ensure the database schema exists before any request that needs it. If the
+// database is unreachable, return 503 instead of hanging or crashing — except
+// for /api/config, which needs no database so the frontend can still boot.
+api.use(async (req, res, next) => {
+  if (req.path === '/api/config') return next()
   try {
-    await ready
-    next()
-  } catch (e) {
-    next(e)
+    await ready()
+  } catch {
+    res.status(503).json({ error: 'Database is not available yet.' })
+    return
   }
+  next()
 })
 
 const SESSION_COOKIE = 'backlog_session'
@@ -319,4 +323,15 @@ api.delete('/api/lists/:id/share/:userId', async (req, res) => {
 
 api.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Not found' })
+})
+
+api.use((err: any, _req: Request, res: Response, _next: (e?: any) => void) => {
+  const msg = String(err?.message ?? err)
+  if (/DATABASE_URL/.test(msg) || err?.code === 'ECONNREFUSED') {
+    console.error('[backlog] database unavailable:', msg)
+    res.status(503).json({ error: 'Database is not available yet.' })
+    return
+  }
+  console.error(err)
+  res.status(500).json({ error: 'Server error' })
 })
