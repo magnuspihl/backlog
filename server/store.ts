@@ -13,6 +13,7 @@ export type Game = {
   name: string
   cover: string | null // full image url
   releaseYear: number | null
+  releaseDate: number | null // igdb first_release_date, unix seconds (earliest release across platforms)
 }
 
 export type Access = 'read' | 'write'
@@ -26,6 +27,7 @@ export type List = {
   games: number[] // igdb ids, in insertion order
   orderings: Record<string, number[]> // userId -> ordered igdb ids (that user's personal order)
   vetoes: Record<string, string[]> // igdb id (string) -> userIds who vetoed it
+  awaits: Record<string, string[]> // igdb id (string) -> userIds awaiting an update (play later)
 }
 
 async function init() {
@@ -47,6 +49,7 @@ async function init() {
       cover text,
       release_year int
     );
+    ALTER TABLE games ADD COLUMN IF NOT EXISTS release_date bigint;
     CREATE TABLE IF NOT EXISTS lists (
       id text PRIMARY KEY,
       name text NOT NULL,
@@ -73,6 +76,12 @@ async function init() {
       PRIMARY KEY (list_id, user_id, igdb_id)
     );
     CREATE TABLE IF NOT EXISTS vetoes (
+      list_id text NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+      igdb_id int NOT NULL,
+      user_id text NOT NULL,
+      PRIMARY KEY (list_id, igdb_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS awaits (
       list_id text NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
       igdb_id int NOT NULL,
       user_id text NOT NULL,
@@ -164,9 +173,9 @@ export async function searchUsers(q: string): Promise<User[]> {
 export async function cacheGames(games: Game[]) {
   for (const g of games) {
     await db.query(
-      `INSERT INTO games (id, name, cover, release_year) VALUES ($1,$2,$3,$4)
-       ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, cover=EXCLUDED.cover, release_year=EXCLUDED.release_year`,
-      [g.id, g.name, g.cover, g.releaseYear],
+      `INSERT INTO games (id, name, cover, release_year, release_date) VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, cover=EXCLUDED.cover, release_year=EXCLUDED.release_year, release_date=EXCLUDED.release_date`,
+      [g.id, g.name, g.cover, g.releaseYear, g.releaseDate],
     )
   }
 }
@@ -178,8 +187,26 @@ export async function getGameMap(ids: number[]): Promise<Map<number, Game>> {
     [...new Set(ids)],
   ])
   for (const r of rows)
-    map.set(r.id, { id: r.id, name: r.name, cover: r.cover, releaseYear: r.release_year })
+    map.set(r.id, {
+      id: r.id,
+      name: r.name,
+      cover: r.cover,
+      releaseYear: r.release_year,
+      releaseDate: r.release_date == null ? null : Number(r.release_date),
+    })
   return map
+}
+
+// Games whose tier could still change: no known release date, or a date that
+// is still in the future. Released games (past date) never change tier, so we
+// skip them to keep the periodic IGDB refresh cheap.
+export async function gamesNeedingDateRefresh(): Promise<number[]> {
+  const nowSecs = Math.floor(Date.now() / 1000)
+  const { rows } = await db.query<any>(
+    'SELECT id FROM games WHERE release_date IS NULL OR release_date > $1',
+    [nowSecs],
+  )
+  return rows.map((r) => r.id as number)
 }
 
 async function gameExists(id: number): Promise<boolean> {
@@ -221,6 +248,12 @@ export async function getList(id: string): Promise<List | null> {
     ;(vetoes[String(r.igdb_id)] ??= []).push(r.user_id)
   }
 
+  const awaits: Record<string, string[]> = {}
+  for (const r of (await db.query<any>('SELECT igdb_id, user_id FROM awaits WHERE list_id = $1', [id]))
+    .rows) {
+    ;(awaits[String(r.igdb_id)] ??= []).push(r.user_id)
+  }
+
   return {
     id: row.id,
     name: row.name,
@@ -230,6 +263,7 @@ export async function getList(id: string): Promise<List | null> {
     games,
     orderings,
     vetoes,
+    awaits,
   }
 }
 
@@ -273,7 +307,7 @@ export async function createList(name: string, ownerId: string): Promise<List> {
     ownerId,
     createdAt,
   ])
-  return { id, name, ownerId, createdAt, members: {}, games: [], orderings: {}, vetoes: {} }
+  return { id, name, ownerId, createdAt, members: {}, games: [], orderings: {}, vetoes: {}, awaits: {} }
 }
 
 export async function deleteList(id: string) {
@@ -308,6 +342,7 @@ export async function removeGameFromList(listId: string, gameId: number) {
   await db.query('DELETE FROM list_games WHERE list_id=$1 AND igdb_id=$2', [listId, gameId])
   await db.query('DELETE FROM orderings WHERE list_id=$1 AND igdb_id=$2', [listId, gameId])
   await db.query('DELETE FROM vetoes WHERE list_id=$1 AND igdb_id=$2', [listId, gameId])
+  await db.query('DELETE FROM awaits WHERE list_id=$1 AND igdb_id=$2', [listId, gameId])
 }
 
 export async function setOrdering(listId: string, userId: string, order: number[]) {
@@ -344,6 +379,21 @@ export async function setVeto(listId: string, gameId: number, userId: string, ve
   }
 }
 
+export async function setAwait(listId: string, gameId: number, userId: string, awaiting: boolean) {
+  if (awaiting) {
+    await db.query(
+      'INSERT INTO awaits (list_id, igdb_id, user_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+      [listId, gameId, userId],
+    )
+  } else {
+    await db.query('DELETE FROM awaits WHERE list_id=$1 AND igdb_id=$2 AND user_id=$3', [
+      listId,
+      gameId,
+      userId,
+    ])
+  }
+}
+
 export async function gameInList(listId: string, gameId: number): Promise<boolean> {
   return (
     (await db.query('SELECT 1 FROM list_games WHERE list_id=$1 AND igdb_id=$2', [listId, gameId]))
@@ -363,4 +413,5 @@ export async function unshareList(listId: string, userId: string) {
   await db.query('DELETE FROM list_members WHERE list_id=$1 AND user_id=$2', [listId, userId])
   await db.query('DELETE FROM orderings WHERE list_id=$1 AND user_id=$2', [listId, userId])
   await db.query('DELETE FROM vetoes WHERE list_id=$1 AND user_id=$2', [listId, userId])
+  await db.query('DELETE FROM awaits WHERE list_id=$1 AND user_id=$2', [listId, userId])
 }

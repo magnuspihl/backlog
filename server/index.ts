@@ -20,6 +20,7 @@ import {
   removeGameFromList,
   setOrdering,
   setVeto,
+  setAwait,
   gameInList,
   shareList,
   unshareList,
@@ -29,10 +30,15 @@ import {
 import { parseCookies, discordAuthUrl, exchangeCode, redirectUri } from './auth.ts'
 import { discordConfigured, igdbConfigured } from './secrets.ts'
 import { searchGames, fetchGames } from './igdb.ts'
-import { sharedOrder, personalOrder, enrichGames } from './lists.ts'
+import { sharedOrder, personalOrder, enrichGames, isUnreleased } from './lists.ts'
+import { startReleaseDateRefresh } from './refresh.ts'
 
 export const api = express()
 api.use(express.json())
+
+// Periodically re-check IGDB release dates so unreleased games promote
+// themselves once they ship. No-ops until the database + IGDB are configured.
+startReleaseDateRefresh()
 
 // Ensure the database schema exists before any request that needs it. If the
 // database is unreachable, return 503 instead of hanging or crashing — except
@@ -69,30 +75,37 @@ function publicUser(u: User) {
   return { id: u.id, username: u.username, globalName: u.globalName, avatar: u.avatar }
 }
 
-function withVeto(
+function withFlags(
   games: ReturnType<typeof enrichGames>,
   list: List,
   userId: string,
   userMap: Record<string, User>,
 ) {
+  const names = (uids: string[]) =>
+    uids.map((uid) => {
+      const u = userMap[uid]
+      return u ? u.globalName || u.username : 'Someone'
+    })
   return games.map((g) => {
     const voters = list.vetoes?.[String(g.id)] ?? []
+    const awaiters = list.awaits?.[String(g.id)] ?? []
     return {
       ...g,
       vetoed: voters.length > 0,
       vetoedByMe: voters.includes(userId),
-      vetoedBy: voters.map((uid) => {
-        const u = userMap[uid]
-        return u ? u.globalName || u.username : 'Someone'
-      }),
+      vetoedBy: names(voters),
+      awaiting: awaiters.length > 0,
+      awaitingByMe: awaiters.includes(userId),
+      awaitingBy: names(awaiters),
+      unreleased: isUnreleased(g),
     }
   })
 }
 
 async function viewList(list: List, userId: string) {
-  const sharedIds = sharedOrder(list)
+  const gameMap = await getGameMap(list.games)
+  const sharedIds = sharedOrder(list, gameMap)
   const myIds = personalOrder(list, userId)
-  const gameMap = await getGameMap([...new Set([...sharedIds, ...myIds])])
   const userMap = await getUsers([list.ownerId, ...Object.keys(list.members)])
   const members = Object.entries(list.members).map(([id, access]) => ({
     user: userMap[id] ? publicUser(userMap[id]) : { id, username: id, globalName: null, avatar: null },
@@ -106,8 +119,8 @@ async function viewList(list: List, userId: string) {
     access: accessFor(list, userId),
     createdAt: list.createdAt,
     members,
-    sharedOrder: withVeto(enrichGames(sharedIds, gameMap), list, userId, userMap),
-    myOrder: withVeto(enrichGames(myIds, gameMap), list, userId, userMap),
+    sharedOrder: withFlags(enrichGames(sharedIds, gameMap), list, userId, userMap),
+    myOrder: withFlags(enrichGames(myIds, gameMap), list, userId, userMap),
     contributorCount: Object.values(list.orderings).filter((o) => o.length > 0).length,
   }
 }
@@ -277,6 +290,21 @@ api.post('/api/lists/:id/games/:gameId/veto', async (req, res) => {
   const already = (list.vetoes?.[String(gameId)] ?? []).includes(user.id)
   const vetoed = req.body?.vetoed === undefined ? !already : Boolean(req.body.vetoed)
   await setVeto(list.id, gameId, user.id, vetoed)
+  const fresh = await getList(list.id)
+  res.json({ list: await viewList(fresh!, user.id) })
+})
+
+api.post('/api/lists/:id/games/:gameId/await', async (req, res) => {
+  const user = await requireUser(req, res)
+  if (!user) return
+  const list = await loadList(req, res, user, 'write')
+  if (!list) return
+  const gameId = Number(req.params.gameId)
+  if (!(await gameInList(list.id, gameId)))
+    return res.status(404).json({ error: 'Game not in list' })
+  const already = (list.awaits?.[String(gameId)] ?? []).includes(user.id)
+  const awaiting = req.body?.awaiting === undefined ? !already : Boolean(req.body.awaiting)
+  await setAwait(list.id, gameId, user.id, awaiting)
   const fresh = await getList(list.id)
   res.json({ list: await viewList(fresh!, user.id) })
 })

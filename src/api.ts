@@ -13,6 +13,10 @@ export type Game = {
   vetoed?: boolean
   vetoedByMe?: boolean
   vetoedBy?: string[]
+  awaiting?: boolean
+  awaitingByMe?: boolean
+  awaitingBy?: string[]
+  unreleased?: boolean
 }
 
 export type Access = 'read' | 'write'
@@ -83,6 +87,11 @@ export const api = {
     req<{ list: ListDetail }>(`/api/lists/${id}/games/${gameId}/veto`, {
       method: 'POST',
       body: JSON.stringify({ vetoed }),
+    }),
+  setAwait: (id: string, gameId: number, awaiting: boolean) =>
+    req<{ list: ListDetail }>(`/api/lists/${id}/games/${gameId}/await`, {
+      method: 'POST',
+      body: JSON.stringify({ awaiting }),
     }),
   setOrder: (id: string, order: number[]) =>
     req<{ list: ListDetail }>(`/api/lists/${id}/order`, {

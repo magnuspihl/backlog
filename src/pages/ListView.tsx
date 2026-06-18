@@ -48,6 +48,11 @@ export default function ListView() {
     setList(updated)
   }
 
+  async function toggleAwait(g: Game) {
+    const { list: updated } = await api.setAwait(list!.id, g.id, !g.awaitingByMe)
+    setList(updated)
+  }
+
   async function move(index: number, dir: -1 | 1) {
     const order = list!.myOrder.map((g) => g.id)
     const target = index + dir
@@ -112,7 +117,18 @@ export default function ListView() {
         ) : (
           <ol className="game-list">
             {active.map((g: Game, i: number) => (
-              <li key={g.id} className={g.vetoed ? 'game-row vetoed' : 'game-row'}>
+              <li
+                key={g.id}
+                className={
+                  g.vetoed
+                    ? 'game-row vetoed'
+                    : g.unreleased
+                      ? 'game-row unreleased'
+                      : g.awaiting
+                        ? 'game-row awaiting'
+                        : 'game-row'
+                }
+              >
                 <span className="rank">{i + 1}</span>
                 {g.cover ? (
                   <img src={g.cover} alt="" className="cover-sm" />
@@ -124,6 +140,17 @@ export default function ListView() {
                   {g.vetoed ? (
                     <div className="veto-note" title={`Vetoed by ${(g.vetoedBy ?? []).join(', ')}`}>
                       🚫 Vetoed by {(g.vetoedBy ?? []).join(', ')}
+                    </div>
+                  ) : g.unreleased ? (
+                    <div className="unreleased-note" title="Not released yet (per IGDB)">
+                      📅 Unreleased{g.releaseYear ? ` — due ${g.releaseYear}` : ''}
+                    </div>
+                  ) : g.awaiting ? (
+                    <div
+                      className="await-note"
+                      title={`Awaiting an update — flagged by ${(g.awaitingBy ?? []).join(', ')}`}
+                    >
+                      ⏳ Play later — {(g.awaitingBy ?? []).join(', ')}
                     </div>
                   ) : (
                     g.releaseYear && <div className="muted small">{g.releaseYear}</div>
@@ -143,6 +170,19 @@ export default function ListView() {
                         ↓
                       </button>
                     </>
+                  )}
+                  {canEdit && (
+                    <button
+                      className={g.awaitingByMe ? 'icon-btn await active' : 'icon-btn await'}
+                      title={
+                        g.awaitingByMe
+                          ? 'Stop awaiting — rank it normally'
+                          : 'Await update — keep it, but play later'
+                      }
+                      onClick={() => toggleAwait(g)}
+                    >
+                      ⏳
+                    </button>
                   )}
                   {canEdit && (
                     <button

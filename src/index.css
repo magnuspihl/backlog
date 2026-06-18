@@ -155,6 +155,21 @@ select:focus {
   border-color: var(--danger);
   background: color-mix(in srgb, var(--danger) 18%, var(--surface-2));
 }
+.icon-btn.await {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+.icon-btn.await:hover {
+  filter: none;
+  opacity: 1;
+  border-color: var(--accent);
+}
+.icon-btn.await.active {
+  filter: none;
+  opacity: 1;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
+}
 
 /* topbar */
 .topbar {
@@ -402,6 +417,28 @@ select:focus {
 .veto-note {
   font-size: 0.8rem;
   color: var(--danger);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.game-row.awaiting {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+.await-note {
+  font-size: 0.8rem;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.game-row.unreleased {
+  border-color: color-mix(in srgb, #e0a458 45%, var(--border));
+  background: color-mix(in srgb, #e0a458 8%, var(--surface));
+}
+.unreleased-note {
+  font-size: 0.8rem;
+  color: #e0a458;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

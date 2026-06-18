@@ -33,6 +33,7 @@ function toGame(g: RawGame): Game {
     releaseYear: g.first_release_date
       ? new Date(g.first_release_date * 1000).getUTCFullYear()
       : null,
+    releaseDate: g.first_release_date ?? null,
   }
 }
 

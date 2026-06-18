@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     {
       name: 'backlog-api',
-      // rev: forge-provided postgres (DATABASE_URL)
+      // rev: reload server code (no-date=unreleased)
       configureServer(server) {
         server.middlewares.use(api)
       },
