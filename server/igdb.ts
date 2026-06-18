@@ -22,6 +22,15 @@ type RawGame = {
   name: string
   first_release_date?: number
   cover?: { image_id?: string }
+  websites?: { type?: number; url?: string }[]
+}
+
+// IGDB website type 13 = Steam.
+const STEAM_TYPE = 13
+
+function steamUrl(g: RawGame): string | null {
+  const site = g.websites?.find((w) => w.type === STEAM_TYPE && w.url)
+  return site?.url ?? null
 }
 
 function toGame(g: RawGame): Game {
@@ -34,6 +43,7 @@ function toGame(g: RawGame): Game {
       ? new Date(g.first_release_date * 1000).getUTCFullYear()
       : null,
     releaseDate: g.first_release_date ?? null,
+    storeUrl: steamUrl(g),
   }
 }
 
@@ -55,7 +65,7 @@ async function query(body: string): Promise<RawGame[]> {
 export async function searchGames(q: string): Promise<Game[]> {
   if (!igdbConfigured()) throw new Error('IGDB not configured')
   const safe = q.replace(/"/g, '')
-  const body = `search "${safe}"; fields name, first_release_date, cover.image_id; where version_parent = null & game_type = 0; limit 20;`
+  const body = `search "${safe}"; fields name, first_release_date, cover.image_id, websites.type, websites.url; where version_parent = null & game_type = 0; limit 20;`
   const rows = await query(body)
   return rows.map(toGame)
 }
@@ -63,7 +73,7 @@ export async function searchGames(q: string): Promise<Game[]> {
 export async function fetchGames(ids: number[]): Promise<Game[]> {
   if (ids.length === 0) return []
   if (!igdbConfigured()) throw new Error('IGDB not configured')
-  const body = `fields name, first_release_date, cover.image_id; where id = (${ids.join(',')}); limit ${ids.length};`
+  const body = `fields name, first_release_date, cover.image_id, websites.type, websites.url; where id = (${ids.join(',')}); limit ${ids.length};`
   const rows = await query(body)
   return rows.map(toGame)
 }

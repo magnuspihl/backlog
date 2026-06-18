@@ -131,12 +131,26 @@ export default function ListView() {
               >
                 <span className="rank">{i + 1}</span>
                 {g.cover ? (
-                  <img src={g.cover} alt="" className="cover-sm" />
+                  g.storeUrl ? (
+                    <a href={g.storeUrl} target="_blank" rel="noopener noreferrer" title={`${g.name} on Steam`}>
+                      <img src={g.cover} alt="" className="cover-sm" />
+                    </a>
+                  ) : (
+                    <img src={g.cover} alt="" className="cover-sm" />
+                  )
                 ) : (
                   <div className="cover-sm placeholder" />
                 )}
                 <div className="grow">
-                  <div className="game-name">{g.name}</div>
+                  <div className="game-name">
+                    {g.storeUrl ? (
+                      <a href={g.storeUrl} target="_blank" rel="noopener noreferrer">
+                        {g.name}
+                      </a>
+                    ) : (
+                      g.name
+                    )}
+                  </div>
                   {g.vetoed ? (
                     <div className="veto-note" title={`Vetoed by ${(g.vetoedBy ?? []).join(', ')}`}>
                       🚫 Vetoed by {(g.vetoedBy ?? []).join(', ')}

@@ -406,6 +406,10 @@ select:focus {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+.game-name a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
 .game-row.vetoed {
   border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
   background: color-mix(in srgb, var(--danger) 8%, var(--surface));

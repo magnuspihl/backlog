@@ -10,6 +10,7 @@ export type Game = {
   name: string
   cover: string | null
   releaseYear: number | null
+  storeUrl?: string | null
   vetoed?: boolean
   vetoedByMe?: boolean
   vetoedBy?: string[]

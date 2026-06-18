@@ -14,6 +14,7 @@ export type Game = {
   cover: string | null // full image url
   releaseYear: number | null
   releaseDate: number | null // igdb first_release_date, unix seconds (earliest release across platforms)
+  storeUrl: string | null // steam store page, from igdb websites
 }
 
 export type Access = 'read' | 'write'
@@ -50,6 +51,7 @@ async function init() {
       release_year int
     );
     ALTER TABLE games ADD COLUMN IF NOT EXISTS release_date bigint;
+    ALTER TABLE games ADD COLUMN IF NOT EXISTS store_url text;
     CREATE TABLE IF NOT EXISTS lists (
       id text PRIMARY KEY,
       name text NOT NULL,
@@ -173,9 +175,9 @@ export async function searchUsers(q: string): Promise<User[]> {
 export async function cacheGames(games: Game[]) {
   for (const g of games) {
     await db.query(
-      `INSERT INTO games (id, name, cover, release_year, release_date) VALUES ($1,$2,$3,$4,$5)
-       ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, cover=EXCLUDED.cover, release_year=EXCLUDED.release_year, release_date=EXCLUDED.release_date`,
-      [g.id, g.name, g.cover, g.releaseYear, g.releaseDate],
+      `INSERT INTO games (id, name, cover, release_year, release_date, store_url) VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, cover=EXCLUDED.cover, release_year=EXCLUDED.release_year, release_date=EXCLUDED.release_date, store_url=EXCLUDED.store_url`,
+      [g.id, g.name, g.cover, g.releaseYear, g.releaseDate, g.storeUrl],
     )
   }
 }
@@ -193,6 +195,7 @@ export async function getGameMap(ids: number[]): Promise<Map<number, Game>> {
       cover: r.cover,
       releaseYear: r.release_year,
       releaseDate: r.release_date == null ? null : Number(r.release_date),
+      storeUrl: r.store_url ?? null,
     })
   return map
 }

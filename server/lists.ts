@@ -79,6 +79,15 @@ export function personalOrder(list: List, userId: string): number[] {
 
 export function enrichGames(ids: number[], lookup: Map<number, Game>) {
   return ids.map((id) => {
-    return lookup.get(id) ?? { id, name: `Game #${id}`, cover: null, releaseYear: null, releaseDate: null }
+    return (
+      lookup.get(id) ?? {
+        id,
+        name: `Game #${id}`,
+        cover: null,
+        releaseYear: null,
+        releaseDate: null,
+        storeUrl: null,
+      }
+    )
   })
 }

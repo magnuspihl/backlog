@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     {
       name: 'backlog-api',
-      // rev: reload server code (no-date=unreleased)
+      // rev: reload server code (steam store links, websites.type)
       configureServer(server) {
         server.middlewares.use(api)
       },
