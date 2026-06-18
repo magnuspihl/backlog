@@ -21,11 +21,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [redirectUri, setRedirectUri] = useState('')
 
   async function refresh() {
-    const [{ user }, cfg] = await Promise.all([api.me(), api.config()])
-    setUser(user)
-    setDiscordReady(cfg.discord)
-    setIgdbReady(cfg.igdb)
-    setRedirectUri(cfg.redirectUri)
+    const results = await Promise.allSettled([api.config(), api.me()])
+    const [cfgResult, meResult] = results
+    if (cfgResult.status === 'fulfilled') {
+      setDiscordReady(cfgResult.value.discord)
+      setIgdbReady(cfgResult.value.igdb)
+      setRedirectUri(cfgResult.value.redirectUri)
+    }
+    if (meResult.status === 'fulfilled') {
+      setUser(meResult.value.user)
+    } else {
+      setUser(null)
+    }
   }
 
   useEffect(() => {
