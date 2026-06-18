@@ -18,12 +18,20 @@ function load(): Secrets {
     IGDB_CLIENT_ID: '',
     IGDB_CLIENT_SECRET: '',
   }
+  let fromFile: Partial<Secrets> = {}
   try {
-    const raw = readFileSync(join(here, 'secrets.json'), 'utf-8')
-    return { ...empty, ...JSON.parse(raw) }
+    fromFile = JSON.parse(readFileSync(join(here, 'secrets.json'), 'utf-8'))
   } catch {
-    return empty
+    fromFile = {}
   }
+  // Environment variables win over the local file, so a stateless
+  // deploy (e.g. Scaleway) can supply secrets without shipping the file.
+  const merged: Secrets = { ...empty, ...fromFile }
+  for (const key of Object.keys(empty) as (keyof Secrets)[]) {
+    const env = process.env[key]?.trim()
+    if (env) merged[key] = env
+  }
+  return merged
 }
 
 export const secrets = load()
