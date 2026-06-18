@@ -38,7 +38,7 @@ api.use(express.json())
 // database is unreachable, return 503 instead of hanging or crashing — except
 // for /api/config, which needs no database so the frontend can still boot.
 api.use(async (req, res, next) => {
-  if (req.path === '/api/config' || req.path === '/api/dbcheck') return next()
+  if (req.path === '/api/config') return next()
   try {
     await ready()
   } catch {
@@ -119,73 +119,6 @@ api.get('/api/config', (req, res) => {
     igdb: igdbConfigured(),
     redirectUri: redirectUri(req),
   })
-})
-
-// ---------- database diagnostic ----------
-// Safe to expose: reports where the app is trying to connect and why it fails,
-// with the password removed. Lets production surface the real error instead of
-// the generic "not available" message. Remove once the connection is confirmed.
-api.get('/api/dbcheck', async (_req, res) => {
-  const raw = process.env.DATABASE_URL?.trim()
-  const sslEnv = process.env.DATABASE_SSL?.trim() ?? null
-  if (!raw) {
-    res.json({ databaseUrlSet: false, ssl: sslEnv, note: 'DATABASE_URL is not present in this environment.' })
-    return
-  }
-  let host: string | null = null
-  let port: string | null = null
-  let database: string | null = null
-  let user: string | null = null
-  try {
-    const u = new URL(raw)
-    host = u.hostname
-    port = u.port || '5432'
-    database = u.pathname.replace(/^\//, '') || null
-    user = u.username || null
-  } catch {
-    // connection string isn't URL-shaped; leave parsed fields null
-  }
-  const pg = (await import('pg')).default
-  const ssl =
-    sslEnv?.toLowerCase() === 'require'
-      ? { rejectUnauthorized: false }
-      : sslEnv?.toLowerCase() === 'false'
-        ? false
-        : undefined
-  const client = new pg.Client({
-    connectionString: raw,
-    ...(ssl !== undefined ? { ssl } : {}),
-    connectionTimeoutMillis: 5000,
-  })
-  try {
-    await client.connect()
-    const r = await client.query('SELECT version()')
-    await client.end()
-    res.json({
-      databaseUrlSet: true,
-      connected: true,
-      host,
-      port,
-      database,
-      user,
-      ssl: sslEnv,
-      serverVersion: r.rows[0]?.version ?? null,
-    })
-  } catch (e: any) {
-    try {
-      await client.end()
-    } catch {}
-    res.json({
-      databaseUrlSet: true,
-      connected: false,
-      host,
-      port,
-      database,
-      user,
-      ssl: sslEnv,
-      error: { code: e?.code ?? null, message: String(e?.message ?? e) },
-    })
-  }
 })
 
 // ---------- auth ----------
