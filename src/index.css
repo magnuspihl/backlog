@@ -546,7 +546,11 @@ select:focus {
     flex-basis: 0;
   }
   .row-actions {
-    margin-left: auto;
+    flex-basis: 100%;
+    justify-content: flex-end;
+    margin-top: 0.4rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--border);
   }
   .login-card {
     padding: 1.6rem;
