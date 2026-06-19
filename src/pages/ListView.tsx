@@ -12,6 +12,8 @@ export default function ListView() {
   const [list, setList] = useState<ListDetail | null>(null)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<'shared' | 'mine'>('shared')
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
 
   async function load() {
     try {
@@ -53,14 +55,19 @@ export default function ListView() {
     setList(updated)
   }
 
-  async function move(index: number, dir: -1 | 1) {
+  async function reorder(from: number, to: number) {
+    if (from === to) return
     const order = list!.myOrder.map((g) => g.id)
-    const target = index + dir
-    if (target < 0 || target >= order.length) return
-    ;[order[index], order[target]] = [order[target], order[index]]
+    const [moved] = order.splice(from, 1)
+    order.splice(to, 0, moved)
     const { list: updated } = await api.setOrder(list!.id, order)
     setList(updated)
-    setTab('mine')
+  }
+
+  function onDrop(to: number) {
+    if (dragIndex !== null) reorder(dragIndex, to)
+    setDragIndex(null)
+    setDragOverIndex(null)
   }
 
   async function del() {
@@ -107,7 +114,7 @@ export default function ListView() {
             's rankings. Reorder under “My ranking” to change where you pull it.
           </p>
         ) : canEdit ? (
-          <p className="muted small">Your personal order. Use the arrows to rank games up or down.</p>
+          <p className="muted small">Your personal order. Drag games by the handle to rank them.</p>
         ) : (
           <p className="muted small">You have view-only access, so you can't rank this list.</p>
         )}
@@ -116,27 +123,59 @@ export default function ListView() {
           <p className="muted">No games yet{canEdit ? ' — add some below.' : '.'}</p>
         ) : (
           <ol className="game-list">
-            {active.map((g: Game, i: number) => (
+            {active.map((g: Game, i: number) => {
+              const draggable = tab === 'mine' && canEdit
+              const classes = [
+                'game-row',
+                g.vetoed ? 'vetoed' : g.unreleased ? 'unreleased' : g.awaiting ? 'awaiting' : '',
+                draggable && dragOverIndex === i && dragIndex !== i ? 'drag-over' : '',
+                draggable && dragIndex === i ? 'dragging' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')
+              return (
               <li
                 key={g.id}
-                className={
-                  g.vetoed
-                    ? 'game-row vetoed'
-                    : g.unreleased
-                      ? 'game-row unreleased'
-                      : g.awaiting
-                        ? 'game-row awaiting'
-                        : 'game-row'
+                className={classes}
+                draggable={draggable}
+                onDragStart={draggable ? () => setDragIndex(i) : undefined}
+                onDragOver={
+                  draggable
+                    ? (e) => {
+                        e.preventDefault()
+                        setDragOverIndex(i)
+                      }
+                    : undefined
+                }
+                onDrop={draggable ? () => onDrop(i) : undefined}
+                onDragEnd={
+                  draggable
+                    ? () => {
+                        setDragIndex(null)
+                        setDragOverIndex(null)
+                      }
+                    : undefined
                 }
               >
+                {draggable && (
+                  <span className="drag-handle" title="Drag to reorder" aria-hidden="true">
+                    ⠿
+                  </span>
+                )}
                 <span className="rank">{i + 1}</span>
                 {g.cover ? (
                   g.storeUrl ? (
-                    <a href={g.storeUrl} target="_blank" rel="noopener noreferrer" title={`${g.name} on Steam`}>
-                      <img src={g.cover} alt="" className="cover-sm" />
+                    <a
+                      href={g.storeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`${g.name} on Steam`}
+                      draggable={false}
+                    >
+                      <img src={g.cover} alt="" className="cover-sm" draggable={false} />
                     </a>
                   ) : (
-                    <img src={g.cover} alt="" className="cover-sm" />
+                    <img src={g.cover} alt="" className="cover-sm" draggable={false} />
                   )
                 ) : (
                   <div className="cover-sm placeholder" />
@@ -144,7 +183,7 @@ export default function ListView() {
                 <div className="grow">
                   <div className="game-name">
                     {g.storeUrl ? (
-                      <a href={g.storeUrl} target="_blank" rel="noopener noreferrer">
+                      <a href={g.storeUrl} target="_blank" rel="noopener noreferrer" draggable={false}>
                         {g.name}
                       </a>
                     ) : (
@@ -171,20 +210,6 @@ export default function ListView() {
                   )}
                 </div>
                 <div className="row-actions">
-                  {tab === 'mine' && canEdit && (
-                    <>
-                      <button className="icon-btn" disabled={i === 0} onClick={() => move(i, -1)}>
-                        ↑
-                      </button>
-                      <button
-                        className="icon-btn"
-                        disabled={i === active.length - 1}
-                        onClick={() => move(i, 1)}
-                      >
-                        ↓
-                      </button>
-                    </>
-                  )}
                   {canEdit && (
                     <button
                       className={g.awaitingByMe ? 'icon-btn await active' : 'icon-btn await'}
@@ -214,7 +239,8 @@ export default function ListView() {
                   )}
                 </div>
               </li>
-            ))}
+            )
+            })}
           </ol>
         )}
 

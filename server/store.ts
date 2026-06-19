@@ -52,6 +52,7 @@ async function init() {
     );
     ALTER TABLE games ADD COLUMN IF NOT EXISTS release_date bigint;
     ALTER TABLE games ADD COLUMN IF NOT EXISTS store_url text;
+    ALTER TABLE games ADD COLUMN IF NOT EXISTS store_url_checked boolean NOT NULL DEFAULT false;
     CREATE TABLE IF NOT EXISTS lists (
       id text PRIMARY KEY,
       name text NOT NULL,
@@ -173,10 +174,13 @@ export async function searchUsers(q: string): Promise<User[]> {
 
 // ----- games cache -----
 export async function cacheGames(games: Game[]) {
+  // Every game here came from a fresh IGDB fetch that included website data, so
+  // mark store_url as checked even when it's null (the game just isn't on Steam)
+  // — that stops the backfill from re-fetching it forever.
   for (const g of games) {
     await db.query(
-      `INSERT INTO games (id, name, cover, release_year, release_date, store_url) VALUES ($1,$2,$3,$4,$5,$6)
-       ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, cover=EXCLUDED.cover, release_year=EXCLUDED.release_year, release_date=EXCLUDED.release_date, store_url=EXCLUDED.store_url`,
+      `INSERT INTO games (id, name, cover, release_year, release_date, store_url, store_url_checked) VALUES ($1,$2,$3,$4,$5,$6,true)
+       ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, cover=EXCLUDED.cover, release_year=EXCLUDED.release_year, release_date=EXCLUDED.release_date, store_url=EXCLUDED.store_url, store_url_checked=true`,
       [g.id, g.name, g.cover, g.releaseYear, g.releaseDate, g.storeUrl],
     )
   }
@@ -208,6 +212,15 @@ export async function gamesNeedingDateRefresh(): Promise<number[]> {
   const { rows } = await db.query<any>(
     'SELECT id FROM games WHERE release_date IS NULL OR release_date > $1',
     [nowSecs],
+  )
+  return rows.map((r) => r.id as number)
+}
+
+// Games cached before Steam links were tracked, that have never had their
+// website data fetched. Used for a one-time backfill at startup.
+export async function gamesNeedingStoreUrl(): Promise<number[]> {
+  const { rows } = await db.query<any>(
+    'SELECT id FROM games WHERE store_url IS NULL AND store_url_checked = false',
   )
   return rows.map((r) => r.id as number)
 }
