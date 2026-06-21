@@ -18,6 +18,7 @@ export type Game = {
   awaitingByMe?: boolean
   awaitingBy?: string[]
   unreleased?: boolean
+  rankings?: { name: string; rank: number }[]
 }
 
 export type Access = 'read' | 'write'

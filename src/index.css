@@ -170,6 +170,63 @@ select:focus {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
 }
+.icon-btn.info:hover,
+.icon-btn.info.active {
+  border-color: var(--accent);
+}
+
+/* individual-rankings popover */
+.rank-info {
+  position: relative;
+}
+.rank-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  min-width: 180px;
+  max-width: 240px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem 0.7rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  display: none;
+}
+.rank-info:hover .rank-popover,
+.rank-popover.open {
+  display: block;
+}
+.rank-popover-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
+}
+.rank-popover ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.rank-popover li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+}
+.rank-popover .rp-rank {
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+  min-width: 1.8rem;
+}
+.rank-popover .rp-name {
+  overflow-wrap: anywhere;
+}
 
 /* topbar */
 .topbar {

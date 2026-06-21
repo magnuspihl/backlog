@@ -111,6 +111,25 @@ async function viewList(list: List, userId: string) {
     user: userMap[id] ? publicUser(userMap[id]) : { id, username: id, globalName: null, avatar: null },
     access,
   }))
+
+  // Per-game breakdown of where each contributor ranks it, so the group order
+  // can reveal the individual rankings behind the blend.
+  const rankingsByGame = new Map<number, { name: string; rank: number }[]>()
+  for (const uid of Object.keys(list.orderings)) {
+    if ((list.orderings[uid]?.length ?? 0) === 0) continue
+    const u = userMap[uid]
+    const name = u ? u.globalName || u.username : 'Someone'
+    personalOrder(list, uid).forEach((gid, idx) => {
+      const arr = rankingsByGame.get(gid) ?? []
+      arr.push({ name, rank: idx + 1 })
+      rankingsByGame.set(gid, arr)
+    })
+  }
+  const sharedGames = withFlags(enrichGames(sharedIds, gameMap), list, userId, userMap).map((g) => ({
+    ...g,
+    rankings: (rankingsByGame.get(g.id) ?? []).sort((a, b) => a.rank - b.rank),
+  }))
+
   return {
     id: list.id,
     name: list.name,
@@ -119,7 +138,7 @@ async function viewList(list: List, userId: string) {
     access: accessFor(list, userId),
     createdAt: list.createdAt,
     members,
-    sharedOrder: withFlags(enrichGames(sharedIds, gameMap), list, userId, userMap),
+    sharedOrder: sharedGames,
     myOrder: withFlags(enrichGames(myIds, gameMap), list, userId, userMap),
     contributorCount: Object.values(list.orderings).filter((o) => o.length > 0).length,
   }

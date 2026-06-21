@@ -14,6 +14,7 @@ export default function ListView() {
   const [tab, setTab] = useState<'shared' | 'mine'>('shared')
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const [openRankings, setOpenRankings] = useState<number | null>(null)
 
   async function load() {
     try {
@@ -210,6 +211,35 @@ export default function ListView() {
                   )}
                 </div>
                 <div className="row-actions">
+                  {tab === 'shared' && (
+                    <div
+                      className="rank-info"
+                      onMouseLeave={() => setOpenRankings((cur) => (cur === g.id ? null : cur))}
+                    >
+                      <button
+                        className={openRankings === g.id ? 'icon-btn info active' : 'icon-btn info'}
+                        title="See each person's ranking"
+                        onClick={() => setOpenRankings(openRankings === g.id ? null : g.id)}
+                      >
+                        📊
+                      </button>
+                      <div className={openRankings === g.id ? 'rank-popover open' : 'rank-popover'}>
+                        <div className="rank-popover-title">Individual rankings</div>
+                        {(g.rankings ?? []).length ? (
+                          <ul>
+                            {(g.rankings ?? []).map((r, ri) => (
+                              <li key={ri}>
+                                <span className="rp-rank">#{r.rank}</span>
+                                <span className="rp-name">{r.name}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="muted small">No one has ranked this yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   {canEdit && (
                     <button
                       className={g.awaitingByMe ? 'icon-btn await active' : 'icon-btn await'}
