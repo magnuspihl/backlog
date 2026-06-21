@@ -170,8 +170,14 @@ select:focus {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
 }
+.icon-btn.info {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
 .icon-btn.info:hover,
 .icon-btn.info.active {
+  filter: none;
+  opacity: 1;
   border-color: var(--accent);
 }
 
