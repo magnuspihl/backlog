@@ -30,7 +30,7 @@ import {
 import { parseCookies, discordAuthUrl, exchangeCode, redirectUri } from './auth.ts'
 import { discordConfigured, igdbConfigured } from './secrets.ts'
 import { searchGames, fetchGames } from './igdb.ts'
-import { sharedOrder, personalOrder, enrichGames, isUnreleased } from './lists.ts'
+import { sharedOrder, personalOrder, personalGroupOrder, enrichGames, isUnreleased } from './lists.ts'
 import { startReleaseDateRefresh } from './refresh.ts'
 
 export const api = express()
@@ -119,7 +119,7 @@ async function viewList(list: List, userId: string) {
     if ((list.orderings[uid]?.length ?? 0) === 0) continue
     const u = userMap[uid]
     const name = u ? u.globalName || u.username : 'Someone'
-    personalOrder(list, uid).forEach((gid, idx) => {
+    personalGroupOrder(list, uid, gameMap).forEach((gid, idx) => {
       const arr = rankingsByGame.get(gid) ?? []
       arr.push({ name, rank: idx + 1 })
       rankingsByGame.set(gid, arr)

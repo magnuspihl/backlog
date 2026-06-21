@@ -77,6 +77,30 @@ export function personalOrder(list: List, userId: string): number[] {
   return ordered
 }
 
+// Where each game would land if this one user were the entire group: their
+// personal ranking, but with the same tiering applied — their own vetoed games
+// sink to the bottom, unreleased games (metadata) above those, their own
+// awaited games above those, normal games on top. Used to show the individual
+// breakdown behind the blended group order in the same terms as the group view.
+export function personalGroupOrder(list: List, userId: string, meta: Map<number, Game>): number[] {
+  const order = personalOrder(list, userId)
+  const rankIndex = new Map(order.map((id, i) => [id, i]))
+  const userVetoed = (id: number) => (list.vetoes?.[String(id)] ?? []).includes(userId)
+  const userAwaited = (id: number) => (list.awaits?.[String(id)] ?? []).includes(userId)
+  const tierOf = (id: number): number => {
+    if (userVetoed(id)) return 3
+    if (isUnreleased(meta.get(id))) return 2
+    if (userAwaited(id)) return 1
+    return 0
+  }
+  return [...order].sort((a, b) => {
+    const ta = tierOf(a)
+    const tb = tierOf(b)
+    if (ta !== tb) return ta - tb
+    return (rankIndex.get(a) ?? 0) - (rankIndex.get(b) ?? 0)
+  })
+}
+
 export function enrichGames(ids: number[], lookup: Map<number, Game>) {
   return ids.map((id) => {
     return (
