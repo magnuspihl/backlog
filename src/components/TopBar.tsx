@@ -9,6 +9,9 @@ export default function TopBar() {
         <Link to="/" className="brand">
           🎮 Backlog
         </Link>
+        <span className="version-tag" title="Build version">
+          v{__APP_VERSION__}
+        </span>
         {user && (
           <div className="user-chip">
             {user.avatar && <img src={user.avatar} alt="" className="avatar" />}

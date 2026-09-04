@@ -252,6 +252,13 @@ select:focus {
   font-weight: 700;
   font-size: 1.1rem;
 }
+.version-tag {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-family: monospace;
+  margin-right: auto;
+  margin-left: 0.75rem;
+}
 .user-chip {
   display: flex;
   align-items: center;
