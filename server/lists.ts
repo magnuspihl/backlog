@@ -31,18 +31,20 @@ function tier(list: List, gameId: number, meta: Map<number, Game>): 0 | 1 | 2 | 
 }
 
 // Compute the shared ordering by averaging each game's rank across every
-// user who has a personal ordering. Games nobody ranked fall back to the
-// list's insertion order, placed after ranked games. Awaited games sink below
-// the normal ones, and vetoed games below those — each tier keeping its
-// relative average order among itself.
+// user who has a personal ordering — using each user's tier-adjusted
+// position (personalGroupOrder), the same numbers shown in the "individual
+// rankings" breakdown, so the displayed ranks are the ones actually being
+// averaged. Games nobody ranked fall back to the list's insertion order,
+// placed after ranked games. Awaited games sink below the normal ones, and
+// vetoed games below those — each tier keeping its relative average order
+// among itself.
 export function sharedOrder(list: List, meta: Map<number, Game>): number[] {
-  const orderings = Object.values(list.orderings).filter((o) => o.length > 0)
+  const userIds = Object.keys(list.orderings).filter((uid) => (list.orderings[uid]?.length ?? 0) > 0)
   const insertionIndex = new Map(list.games.map((id, i) => [id, i]))
 
   const ranks = new Map<number, number[]>()
-  for (const ordering of orderings) {
-    ordering.forEach((gameId, rank) => {
-      if (!insertionIndex.has(gameId)) return
+  for (const uid of userIds) {
+    personalGroupOrder(list, uid, meta).forEach((gameId, rank) => {
       const arr = ranks.get(gameId) ?? []
       arr.push(rank)
       ranks.set(gameId, arr)
@@ -54,7 +56,7 @@ export function sharedOrder(list: List, meta: Map<number, Game>): number[] {
     const tb = tier(list, b, meta)
     if (ta !== tb) return ta - tb // normal, then awaiting, then unreleased, then vetoed
 
-    if (orderings.length === 0) {
+    if (userIds.length === 0) {
       return (insertionIndex.get(a) ?? 0) - (insertionIndex.get(b) ?? 0)
     }
     const ra = ranks.get(a)
