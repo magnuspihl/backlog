@@ -224,7 +224,13 @@ export default function ListView() {
                         📊
                       </button>
                       <div className={openRankings === g.id ? 'rank-popover open' : 'rank-popover'}>
-                        <div className="rank-popover-title">Individual rankings</div>
+                        <div className="rank-popover-title">
+                          Individual rankings
+                          {(g.rankings ?? []).length > 0 &&
+                            ` (avg ${(
+                              (g.rankings ?? []).reduce((sum, r) => sum + r.rank, 0) / (g.rankings ?? []).length
+                            ).toFixed(2)})`}
+                        </div>
                         {(g.rankings ?? []).length ? (
                           <ul>
                             {(g.rankings ?? []).map((r, ri) => (
