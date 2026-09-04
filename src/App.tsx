@@ -12,18 +12,20 @@ function Shell() {
     return <div className="center muted">Loading…</div>
   }
 
-  if (!user) return <Login />
-
   return (
     <>
       <TopBar />
-      <main className="container">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/lists/:id" element={<ListView />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
+      {!user ? (
+        <Login />
+      ) : (
+        <main className="container">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/lists/:id" element={<ListView />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      )}
     </>
   )
 }
